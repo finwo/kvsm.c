@@ -1,0 +1,7 @@
+.DS_Store
+._.DS_Store
+/lib/
+/.cache/
+/compile_commands.json
+*.o
+*.db
