@@ -4,6 +4,7 @@
 
 #include "finwo/io.h"
 #include "rxi/log.h"
+#include "tidwall/buf.h"
 
 #include "kvsm.h"
 
