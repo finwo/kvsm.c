@@ -32,13 +32,16 @@ struct kvsm_transaction {
 
 struct kvsm * kvsm_open(const char *filename, const int isBlockDev);
 void          kvsm_close(struct kvsm *ctx);
+void          kvsm_compact(struct kvsm *ctx, uint64_t increment);
 
 struct kvsm_transaction * kvsm_transaction_init(struct kvsm *ctx);
-void                      kvsm_transaction_get(struct kvsm_transaction *tx, const struct buf *key);
+struct kvsm_transaction * kvsm_transaction_load(struct kvsm *ctx, PALLOC_OFFSET offset);
+struct buf              * kvsm_transaction_get(struct kvsm_transaction *tx, const struct buf *key);
 void                      kvsm_transaction_set(struct kvsm_transaction *tx, const struct buf *key, const struct buf *value);
 void                      kvsm_transaction_del(struct kvsm_transaction *tx, const struct buf *key);
 void                      kvsm_transaction_commit(struct kvsm_transaction *tx);
 void                      kvsm_transaction_free(struct kvsm_transaction *tx);
+void                      kvsm_transaction_copy_records(struct kvsm_transaction *dst, struct kvsm_transaction *src);
 
 // #ifndef __CHUNKMODULE_DOMAIN_TRANSACTION_H__
 // #define __CHUNKMODULE_DOMAIN_TRANSACTION_H__

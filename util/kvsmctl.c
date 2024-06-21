@@ -2,6 +2,7 @@
 #include <strings.h>
 #include <unistd.h>
 
+#include "finwo/io.h"
 #include "rxi/log.h"
 
 #include "kvsm.h"
@@ -16,12 +17,15 @@ void usage_global(char **argv) {
   printf("  -v level     Set verbosity level (fatal,error,warn,info,debug,trace)\n");
   printf("\n");
   printf("Commands\n");
-  printf("  TODO\n");
+  printf("  current-increment  Outputs the current transaction increment\n");
+  printf("  get [key]          Outputs the value of the given/stdin key to stdout\n");
+  printf("  del [key]          Writes a tombstone on the given/stdin key in a new transaction\n");
+  printf("  put <key>          Sets the value of the given key to stdin data in a new transaction\n");
   printf("\n");
 }
 
 int main(int argc, char **argv) {
-  log_set_level(LOG_TRACE);
+  log_set_level(LOG_INFO);
   char *filename = NULL;
   char *command  = NULL;
 
@@ -60,13 +64,56 @@ int main(int argc, char **argv) {
         return 1;
     }
   }
-  if (optind < argc) {
-    command = argv[optind++];
+  if (optind < argc) { command = argv[optind++];
   }
   if (!command) {
     log_fatal("No command given");
+    return 1;
+  }
+  if (!filename) {
+    log_fatal("No storage file given");
+    return 1;
   }
 
+  struct kvsm *ctx = kvsm_open(filename, 0);
+
+  if (0) {
+    // Intentionally empty
+  } else if (!strcasecmp(command, "current-increment")) {
+    printf("%lld\n", ctx->root_increment);
+  } else if (!strcasecmp(command, "get")) {
+
+    struct buf *key = calloc(1, sizeof(struct buf));
+
+    if (optind < argc) {
+      buf_append(key, argv[optind], strlen(argv[optind]));
+      optind++;
+    } else {
+      log_fatal("Reading key from stdin not implemented");
+      return 1;
+    }
+
+    struct kvsm_transaction *tx    = kvsm_transaction_load(ctx, ctx->root_offset);
+    struct buf              *found = kvsm_transaction_get(tx, key);
+
+    if (found) {
+      write_os(STDOUT_FILENO, found->data, found->len);
+      buf_clear(found);
+      free(found);
+    }
+
+    kvsm_transaction_free(tx);
+  } else if (!strcasecmp(command, "del")) {
+    // TODO
+  } else if (!strcasecmp(command, "put")) {
+
+    // TODO
+  } else {
+    log_fatal("Unknown command: %s", command);
+    return 1;
+  }
+
+  kvsm_close(ctx);
 
   /*struct kvsm *ctx = kvsm_open("pizza.db", 0);*/
   /*struct kvsm_transaction *tx = kvsm_transaction_init(ctx);*/
@@ -96,5 +143,5 @@ int main(int argc, char **argv) {
   /* kvsm_transaction_free(tx); */
   /* log_info("OK\n"); */
 
-  return 42;
+  return 0;
 }
