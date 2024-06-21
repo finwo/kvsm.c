@@ -400,7 +400,7 @@ void kvsm_transaction_del(struct kvsm_transaction *tx, const struct buf *key) {
   return kvsm_transaction_set(tx, key, &((struct buf){ .len = 0, .cap = 0 }));
 }
 
-// Caution: does NOT write end-of-list indicator if entryless transaction is given
+// Caution: intentionally does NOT write end-of-list indicator if entryless transaction is given
 void kvsm_transaction_commit(struct kvsm_transaction *tx) {
   int i;
   uint8_t len8;
@@ -512,7 +512,7 @@ void kvsm_transaction_commit(struct kvsm_transaction *tx) {
   tx->increment = be64toh(tx->increment);
 
   // Update global state
-  if (tx->increment > ctx->root_increment) {
+  if (tx->increment >= ctx->root_increment) {
     ctx->root_offset = tx->offset;
     ctx->root_increment = tx->increment;
   }
