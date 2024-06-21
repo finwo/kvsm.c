@@ -9,7 +9,7 @@
 struct kvsm {
   PALLOC_FD     fd;
   PALLOC_OFFSET root_offset;
-  uint64_t      root_tstamp;
+  uint64_t      root_increment;
 };
 
 struct kvsm_transaction_entry {
@@ -22,7 +22,7 @@ struct kvsm_transaction {
   uint8_t        version;
   PALLOC_OFFSET  offset;
   PALLOC_OFFSET  parent;
-  uint64_t       tstamp;
+  uint64_t       increment;
   uint16_t       flags; // 1 = hydrated
   uint16_t       header_size;
   uint16_t       entry_count;

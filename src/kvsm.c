@@ -7,16 +7,10 @@
 
 #include "kvsm.h"
 
-#if defined(_WIN32) || defined(_WIN64)
-#include <sys/timeb.h>
-#else
-#include <sys/time.h>
-#endif
-
 /*struct kvsm {*/
 /*  PALLOC_FD     fd;*/
 /*  PALLOC_OFFSET root_offset;*/
-/*  uint64_t      root_tstamp;*/
+/*  uint64_t      root_increment;*/
 /*};*/
 
 /*struct kvsm_transaction_entry {*/
@@ -28,7 +22,7 @@
 /*  struct kvsm                   *ctx;*/
 /*  PALLOC_OFFSET                  offset;*/
 /*  PALLOC_OFFSET                  parent;*/
-/*  uint64_t                       tstamp;*/
+/*  uint64_t                       increment;*/
 /*  uint16_t                       mode; // 0=?, 4=W, 2=R*/
 /*  uint16_t                       entry_count;*/
 /*  struct kvsm_transaction_entry *entry;*/
@@ -36,18 +30,6 @@
 
 #define FLAG_HYDRATED     1
 #define FLAG_NONRECURSIVE 2
-
-uint64_t _now() {
-#if defined(_WIN32) || defined(_WIN64)
-  struct _timeb timebuffer;
-  _ftime(&timebuffer);
-  return (uint64_t)(((timebuffer.time * 1000) + timebuffer.millitm));
-#else
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return (tv.tv_sec * ((uint64_t)1000)) + (tv.tv_usec / 1000);
-#endif
-}
 
 struct kvsm_transaction * kvsm_transaction_init(struct kvsm *ctx) {
   struct kvsm_transaction *tx = calloc(1, sizeof(*tx));
@@ -87,10 +69,10 @@ struct kvsm_transaction * kvsm_transaction_load(struct kvsm *ctx, PALLOC_OFFSET 
   tx->offset  = offset;
   /*seek_os(ctx->fd, offset + header_size, SEEK_SET);*/
   read_os(ctx->fd, &(tx->parent), sizeof(PALLOC_OFFSET));
-  read_os(ctx->fd, &(tx->tstamp), sizeof(uint64_t     ));
-  tx->parent = be64toh(tx->parent);
-  tx->tstamp = be64toh(tx->tstamp);
-  log_trace("Read timestamp: %llu", tx->tstamp);
+  read_os(ctx->fd, &(tx->increment), sizeof(uint64_t     ));
+  tx->parent    = be64toh(tx->parent);
+  tx->increment = be64toh(tx->increment);
+  log_trace("Read timestamp: %llu", tx->increment);
   header_size += sizeof(PALLOC_OFFSET);
   header_size += sizeof(uint64_t     );
 
@@ -132,16 +114,16 @@ struct kvsm * kvsm_open(const char *filename, const int isBlockDev) {
       goto kvsm_open_cleanup_palloc;
     }
     log_trace("Loaded tx: %llx", tx->offset);
-    if (tx->tstamp > ctx->root_tstamp) {
+    if (tx->increment > ctx->root_increment) {
       log_trace("Promoted to new root");
-      ctx->root_tstamp = tx->tstamp;
-      ctx->root_offset = off;
+      ctx->root_increment = tx->increment;
+      ctx->root_offset    = off;
     }
     kvsm_transaction_free(tx);
     off = palloc_next(ctx->fd, off);
   }
 
-  log_debug("Detected root: %llx, %d", ctx->root_offset, ctx->root_tstamp);
+  log_debug("Detected root: %llx, %d", ctx->root_offset, ctx->root_increment);
 
   return ctx;
 
@@ -237,9 +219,9 @@ void kvsm_transaction_commit(struct kvsm_transaction *tx) {
   }
 
   // Ensure the transaction has a timestamp
-  if (!tx->tstamp) {
-    tx->tstamp = _now();
-    log_trace("Generated tstamp for tx: %llu", tx->tstamp);
+  if (!tx->increment) {
+    tx->increment = ctx->root_increment + 1;
+    log_trace("Generated increment for tx: %llu", tx->increment);
   }
 
   // Find neighbouring transaction to insert between
@@ -248,13 +230,13 @@ void kvsm_transaction_commit(struct kvsm_transaction *tx) {
   if (!tx->offset) {
     log_trace("transaction_commit: no offset, searching parents");
     while(n_left) {
-      log_trace("checking parent... %llx(^%llx): %llu", n_left->offset, n_left->parent, n_left->tstamp);
-      if (n_left->tstamp < tx->tstamp) {
+      log_trace("checking parent... %llx(^%llx): %llu", n_left->offset, n_left->parent, n_left->increment);
+      if (n_left->increment < tx->increment) {
         log_trace("Promoted to parent");
         tx->parent = n_left->offset;
         break;
       };
-      // TODO: merge if n_left->tstamp == tx->tstamp
+      // TODO: merge if n_left->increment == tx->increment
       if (n_right) kvsm_transaction_free(n_right);
       n_right = n_left;
       n_left  = kvsm_transaction_load(ctx, n_right->parent);
@@ -272,7 +254,7 @@ void kvsm_transaction_commit(struct kvsm_transaction *tx) {
   uint64_t txlen = 0;
   txlen += sizeof(tx->version);
   txlen += sizeof(tx->parent);
-  txlen += sizeof(tx->tstamp);
+  txlen += sizeof(tx->increment);
 
   // Entries
   for( i = 0 ; i < tx->entry_count ; i++ ) {
@@ -294,14 +276,14 @@ void kvsm_transaction_commit(struct kvsm_transaction *tx) {
 
   // Prep data
   //tx->version = htobe8(tx->version);
-  tx->parent  = htobe64(tx->parent);
-  tx->tstamp  = htobe64(tx->tstamp);
+  tx->parent    = htobe64(tx->parent);
+  tx->increment = htobe64(tx->increment);
 
   // Write header
   seek_os(ctx->fd, tx->offset, SEEK_SET);
-  write_os(ctx->fd, &(tx->version), sizeof(tx->version));
-  write_os(ctx->fd, &(tx->parent ), sizeof(tx->parent ));
-  write_os(ctx->fd, &(tx->tstamp ), sizeof(tx->tstamp ));
+  write_os(ctx->fd, &(tx->version   ), sizeof(tx->version   ));
+  write_os(ctx->fd, &(tx->parent    ), sizeof(tx->parent    ));
+  write_os(ctx->fd, &(tx->increment ), sizeof(tx->increment ));
 
   // Write entries
   for( i = 0 ; i < tx->entry_count ; i++ ) {
@@ -326,12 +308,12 @@ void kvsm_transaction_commit(struct kvsm_transaction *tx) {
 
   // Revert data
   tx->parent = be64toh(tx->parent);
-  tx->tstamp = be64toh(tx->tstamp);
+  tx->increment = be64toh(tx->increment);
 
   // Update global state
-  if (tx->tstamp > ctx->root_tstamp) {
+  if (tx->increment > ctx->root_increment) {
     ctx->root_offset = tx->offset;
-    ctx->root_tstamp = tx->tstamp;
+    ctx->root_increment = tx->increment;
   }
 
   // Update our right neighbour
@@ -357,7 +339,7 @@ void kvsm_transaction_free(struct kvsm_transaction *tx) {
 
     for( i = 0 ; i < tx->entry_count ; i++ ) {
       entry = &(tx->entry[i]);
-      printf("Found %*s = %*s\n", (int)(entry->key.len), entry->key.data, (int)(entry->value.len), entry->value.data);
+      log_debug("Found %*s = %*s", (int)(entry->key.len), entry->key.data, (int)(entry->value.len), entry->value.data);
       buf_clear(&(entry->key))  ;
       buf_clear(&(entry->value));
       // DO NOT free entry itself
@@ -369,16 +351,6 @@ void kvsm_transaction_free(struct kvsm_transaction *tx) {
 
   free(tx);
 }
-
-
-
-
-
-
-
-
-
-
 
 // #ifndef __CHUNKMODULE_DOMAIN_TRANSACTION_H__
 // #define __CHUNKMODULE_DOMAIN_TRANSACTION_H__
