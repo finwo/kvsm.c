@@ -555,59 +555,13 @@ void kvsm_transaction_free(struct kvsm_transaction *tx) {
 
 // Copies records from persistent storage tx src into memory tx dst
 void kvsm_transaction_copy_records(struct kvsm_transaction *dst, struct kvsm_transaction *src) {
-/*  printf("cpy: %llx -> %llx\n", src->offset, dst->offset);*/
-/*  if (!src->offset) return;*/
-/*  if (!src->header_length) return;*/
-/**/
-/*  uint8_t len8;*/
-/*  uint16_t len16;*/
-/*  uint64_t len64;*/
-/**/
-/*  // Reserve buffers*/
-/*  struct buf *current_value = calloc(1, sizeof(struct buf));*/
-/*  struct buf *current_key  = calloc(1, sizeof(struct buf));*/
-/**/
-/*  seek_os(kvsm_state->fd, src->offset + src->header_length, SEEK_SET);*/
-/*  while(1) {*/
-/**/
-/*    // Read current key length*/
-/*    // 0 = end of list*/
-/*    read_os(kvsm_state->fd, &len8, sizeof(len8));*/
-/*    printf("Reading key length: %d\n", len8);*/
-/*    if (len8 == 0) break;*/
-/*    if (len8 & 128) {*/
-/*      len16 = (len8 & 127) << 8;*/
-/*      read_os(kvsm_state->fd, &len8, sizeof(len8));*/
-/*      len16 |= len8;*/
-/*    } else {*/
-/*      len16 = len8;*/
-/*    }*/
-/**/
-/*    // Read key data*/
-/*    current_key->data = malloc(len16);*/
-/*    current_key->len  = len16;*/
-/*    read_os(kvsm_state->fd, current_key->data, len16);*/
-/*    printf("Copying %.*s\n", len16, current_key->data);*/
-/**/
-/*    // Read value*/
-/*    read_os(kvsm_state->fd, &len64, sizeof(len64)); // Read value length*/
-/*    current_value->len  = be64toh(len64);*/
-/*    current_value->data = malloc(current_value->len);*/
-/*    read_os(kvsm_state->fd, current_value->data, current_value->len);*/
-/**/
-/*    // Insert into new transaction*/
-/*    kvsm_transaction_set(dst, current_key, current_value);*/
-/*    buf_clear(current_key);*/
-/*    buf_clear(current_value);*/
-/*  }*/
-/**/
-/*  // Done*/
-/*  free(current_key);*/
-/*  free(current_value);*/
+  if (!src->offset) return;
+  if (!src->header_size) return;
+  _kvsm_transaction_hydrate_v0(dst, src->offset + src->header_size);
 }
 
 void kvsm_compact(struct kvsm *ctx, uint64_t increment) {
-  struct kvsm_transaction_t *tx_keep = kvsm_transaction_load(ctx, ctx->root_offset);
+  /*struct kvsm_transaction *tx_keep = kvsm_transaction_load(ctx, ctx->root_offset);*/
 
 
 
