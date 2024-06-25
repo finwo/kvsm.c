@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdio.h>
 #include <strings.h>
 #include <unistd.h>
@@ -19,9 +20,10 @@ void usage_global(char **argv) {
   printf("\n");
   printf("Commands\n");
   printf("  current-increment  Outputs the current transaction increment\n");
+  printf("  compact            Merge transactions, potentially freeing up disk space\n");
   printf("  get [key]          Outputs the value of the given/stdin key to stdout\n");
   printf("  del [key]          Writes a tombstone on the given/stdin key in a new transaction\n");
-  printf("  put <key>          Sets the value of the given key to stdin data in a new transaction\n");
+  printf("  set <key>          Sets the value of the given key to stdin data in a new transaction\n");
   printf("\n");
 }
 
@@ -65,7 +67,8 @@ int main(int argc, char **argv) {
         return 1;
     }
   }
-  if (optind < argc) { command = argv[optind++];
+  if (optind < argc) {
+    command = argv[optind++];
   }
   if (!command) {
     log_fatal("No command given");
@@ -81,9 +84,10 @@ int main(int argc, char **argv) {
   if (0) {
     // Intentionally empty
   } else if (!strcasecmp(command, "current-increment")) {
-    printf("%lld\n", ctx->root_increment);
+    printf("%lld\n", ctx->current_increment);
+  } else if (!strcasecmp(command, "compact")) {
+    kvsm_compact(ctx);
   } else if (!strcasecmp(command, "get")) {
-
     struct buf *key = calloc(1, sizeof(struct buf));
 
     if (optind < argc) {
@@ -94,21 +98,56 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    struct kvsm_transaction *tx    = kvsm_transaction_load(ctx, ctx->root_offset);
-    struct buf              *found = kvsm_transaction_get(tx, key);
-
-    if (found) {
-      write_os(STDOUT_FILENO, found->data, found->len);
-      buf_clear(found);
-      free(found);
+    struct buf *response = kvsm_get(ctx, key);
+    if (!response) {
+      printf("(NULL)\n");
+    } else {
+      write(STDOUT_FILENO, response->data, response->len);
+      buf_clear(response);
+      free(response);
     }
 
-    kvsm_transaction_free(tx);
   } else if (!strcasecmp(command, "del")) {
-    // TODO
-  } else if (!strcasecmp(command, "put")) {
+    struct buf *key = calloc(1, sizeof(struct buf));
 
-    // TODO
+    if (optind < argc) {
+      buf_append(key, argv[optind], strlen(argv[optind]));
+      optind++;
+    } else {
+      log_fatal("Reading key from stdin not implemented");
+      return 1;
+    }
+
+    KVSM_RESPONSE response = kvsm_del(ctx, key);
+    if (response != KVSM_OK) {
+      fprintf(stderr, "Error during deletion\n");
+    }
+
+  } else if (!strcasecmp(command, "set")) {
+    struct buf *key   = calloc(1, sizeof(struct buf));
+    struct buf *value = calloc(1, sizeof(struct buf));
+
+    if (optind < argc) {
+      buf_append(key, argv[optind], strlen(argv[optind]));
+      optind++;
+    } else {
+      log_fatal("Reading key from stdin not implemented");
+      return 1;
+    }
+
+    if (optind < argc) {
+      buf_append(value, argv[optind], strlen(argv[optind]));
+      optind++;
+    } else {
+      log_fatal("Reading value from stdin not implemented");
+      return 1;
+    }
+
+    KVSM_RESPONSE response = kvsm_set(ctx, key, value);
+    if (response != KVSM_OK) {
+      fprintf(stderr, "Error during setting of value\n");
+    }
+
   } else {
     log_fatal("Unknown command: %s", command);
     return 1;
@@ -146,3 +185,7 @@ int main(int argc, char **argv) {
 
   return 0;
 }
+
+void kvsm_cursor_free(struct kvsm_cursor *cursor);
+void kvsm_cursor_parent(struct kvsm_cursor *cursor);
+void kvsm_cursor_serialize(struct kvsm_cursor *cursor);
