@@ -355,6 +355,7 @@ void kvsm_compact(struct kvsm *ctx) {
     seek_os(ctx->fd, current, SEEK_SET);
     read_os(ctx->fd, &parent, sizeof(parent));
     parent = be64toh(parent);
+    // No need to un-mix version, we're 0
 
     read_os(ctx->fd, &current_increment, sizeof(current_increment));
     current_increment = be64toh(current_increment);
@@ -391,10 +392,12 @@ void kvsm_compact(struct kvsm *ctx) {
       if (kvsm_get_increment(ctx, &key) == current_increment) {
         discardable = false;
         seek_os(ctx->fd, tmp, SEEK_SET);
+        buf_clear(&key);
         break;
       }
 
       // Return to after data to continue checking the list
+      buf_clear(&key);
       seek_os(ctx->fd, tmp+len64, SEEK_SET);
 
     }
@@ -410,9 +413,26 @@ void kvsm_compact(struct kvsm *ctx) {
 
     log_debug("Discarding increment %d at %llx", current_increment, current);
 
-    // TODO: pull ourselves from the list
+    if (child) {
+      // Update child to point to our parent
+      // Sanity check
+      seek_os(ctx->fd, child, SEEK_SET);
+      read_os(ctx->fd, &len8, sizeof(len8));
+      if (len8 != 0) return; // Only version 0 supported, bail
 
+      seek_os(ctx->fd, child, SEEK_SET);
+      // No need to mix version, we're 0
+      parent = htobe64(parent);
+      write_os(ctx->fd, &parent, sizeof(parent));
+      parent = be64toh(parent);
+    } else {
+      // No child, but we won't remove root, it's always up-to-date
+    }
+
+    // Free used space
+    pfree(ctx->fd, current);
     current = parent;
+    // Don't update child, hasn't changed
   }
 
 }
