@@ -45,22 +45,85 @@ struct kvsm_cursor * kvsm_cursor_load(const struct kvsm *ctx, PALLOC_OFFSET offs
   return cursor;
 }
 
-void kvsm_cursor_parent(struct kvsm_cursor *cursor) {
-  if (!cursor) return;
-  if (!cursor->ctx) return;
-  if (!cursor->parent) return;
+// Assumes the parent still exists and hasn't been deleted by compaction
+struct kvsm_cursor * kvsm_cursor_previous(const struct kvsm_cursor *cursor) {
+  if (!cursor) return NULL;
+  if (!cursor->ctx) return NULL;
+  if (!cursor->parent) return NULL;
   // Turns the cursor into it's own parent
-  struct kvsm_cursor *parent = kvsm_cursor_load(cursor->ctx, cursor->parent);
-  if (!parent) {
-    cursor->parent    = 0;
-    cursor->offset    = 0;
-    cursor->increment = 0;
-    return;
-  };
-  cursor->parent    = parent->parent;
-  cursor->offset    = parent->offset;
-  cursor->increment = parent->increment;
-  kvsm_cursor_free(parent);
+  return kvsm_cursor_load(cursor->ctx, cursor->parent);
+}
+
+// Assumes the cursor still exists and hasn't been deleted by compaction
+struct kvsm_cursor * kvsm_cursor_next(const struct kvsm_cursor *cursor) {
+  if (!cursor) return NULL;
+  if (!cursor->ctx) return NULL;
+  const struct kvsm *ctx = cursor->ctx;
+
+  PALLOC_OFFSET parent;
+  PALLOC_OFFSET current = ctx->current_offset;
+  PALLOC_OFFSET child   = 0;
+  uint64_t increment;
+  uint8_t len8;
+
+  while(current) {
+    // Sanity-check version
+    seek_os(ctx->fd, current, SEEK_SET);
+    read_os(ctx->fd, &len8, sizeof(len8));
+    if (len8 != 0) return NULL;
+    seek_os(ctx->fd, current, SEEK_SET);
+    read_os(ctx->fd, &parent, sizeof(parent));
+    parent = be64toh(parent);
+    // No need to un-mix version, we're 0
+
+    // Return child (a.k.a. next in time) when we find ourselves
+    read_os(ctx->fd, &increment, sizeof(increment));
+    increment = be64toh(increment);
+    if (increment == cursor->increment) {
+      return kvsm_cursor_load(ctx, child);
+    }
+
+    // Go to the parent
+    child   = current;
+    current = parent;
+  }
+
+  // Not found
+  return NULL;
+}
+
+// Fetches a specific increment, not a specific offset
+struct kvsm_cursor * kvsm_cursor_fetch(const struct kvsm *ctx, const uint64_t increment) {
+  if (!ctx) return NULL;
+
+  PALLOC_OFFSET parent;
+  PALLOC_OFFSET current = ctx->current_offset;
+  uint64_t _increment;
+  uint8_t len8;
+
+  while(current) {
+    // Sanity-check version
+    seek_os(ctx->fd, current, SEEK_SET);
+    read_os(ctx->fd, &len8, sizeof(len8));
+    if (len8 != 0) return NULL;
+    seek_os(ctx->fd, current, SEEK_SET);
+    read_os(ctx->fd, &parent, sizeof(parent));
+    parent = be64toh(parent);
+    // No need to un-mix version, we're 0
+    read_os(ctx->fd, &_increment, sizeof(_increment));
+    _increment = be64toh(_increment);
+
+    // Return if we're the "oldest" or the target increment
+    if ((_increment == increment) || (!parent)) {
+      return kvsm_cursor_load(ctx, current);
+    }
+
+    // Go to the parent
+    current = parent;
+  }
+
+  // Not found
+  return NULL;
 }
 
 struct kvsm * kvsm_open(const char *filename, const int isBlockDev) {
@@ -131,7 +194,7 @@ struct _kvsm_get_response {
   uint64_t increment;
 };
 // DOES support multi-value transactions
-struct _kvsm_get_response * _kvsm_get(struct kvsm *ctx, const struct buf *key, bool load_value) {
+struct _kvsm_get_response * _kvsm_get(const struct kvsm *ctx, const struct buf *key, bool load_value) {
   log_trace("call: kvsm_get(...)");
 
   if (key->len >= 32768) {
@@ -237,7 +300,7 @@ struct _kvsm_get_response * _kvsm_get(struct kvsm *ctx, const struct buf *key, b
   // Not found
   return NULL;
 }
-struct buf  * kvsm_get(struct kvsm *ctx, const struct buf *key) {
+struct buf  * kvsm_get(const struct kvsm *ctx, const struct buf *key) {
   struct _kvsm_get_response *response = _kvsm_get(ctx, key, true);
   if (!response) return NULL;
   struct buf *value = response->value;
@@ -246,7 +309,7 @@ struct buf  * kvsm_get(struct kvsm *ctx, const struct buf *key) {
 }
 
 // Only gets the increment
-uint64_t kvsm_get_increment(struct kvsm *ctx, const struct buf *key) {
+uint64_t kvsm_get_increment(const struct kvsm *ctx, const struct buf *key) {
   struct _kvsm_get_response *response = _kvsm_get(ctx, key, false);
   if (!response) return 0;
   uint64_t increment = response->increment;
@@ -329,7 +392,7 @@ struct kvsm_compact_track {
   uint16_t  len;
   char     *dat;
 };
-void kvsm_compact(struct kvsm *ctx) {
+void kvsm_compact(const struct kvsm *ctx) {
   PALLOC_OFFSET child = 0;
   PALLOC_OFFSET current = ctx->current_offset;
   PALLOC_OFFSET parent = 0;

@@ -83,6 +83,18 @@ int main(int argc, char **argv) {
 
   if (0) {
     // Intentionally empty
+  } else if (!strcasecmp(command, "mini-stat")) {
+
+    struct kvsm_cursor *current   = kvsm_cursor_load(ctx, ctx->current_offset);
+    struct kvsm_cursor *fetched   = kvsm_cursor_fetch(ctx, ctx->current_increment);
+    struct kvsm_cursor *parent    = kvsm_cursor_previous(current);
+    struct kvsm_cursor *recurrent = kvsm_cursor_next(parent);
+
+    printf("Current  : %lld @ %llx\n", current->increment  , current->offset  );
+    printf("Fetched  : %lld @ %llx\n", fetched->increment  , fetched->offset  );
+    printf("Parent   : %lld @ %llx\n", parent->increment   , parent->offset   );
+    printf("Recurrent: %lld @ %llx\n", recurrent->increment, recurrent->offset);
+
   } else if (!strcasecmp(command, "current-increment")) {
     printf("%lld\n", ctx->current_increment);
   } else if (!strcasecmp(command, "compact")) {
@@ -185,7 +197,3 @@ int main(int argc, char **argv) {
 
   return 0;
 }
-
-void kvsm_cursor_free(struct kvsm_cursor *cursor);
-void kvsm_cursor_parent(struct kvsm_cursor *cursor);
-void kvsm_cursor_serialize(struct kvsm_cursor *cursor);
