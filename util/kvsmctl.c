@@ -19,11 +19,13 @@ void usage_global(char **argv) {
   printf("  -v level     Set verbosity level (fatal,error,warn,info,debug,trace)\n");
   printf("\n");
   printf("Commands\n");
-  printf("  current-increment  Outputs the current transaction increment\n");
-  printf("  compact            Merge transactions, potentially freeing up disk space\n");
-  printf("  get [key]          Outputs the value of the given/stdin key to stdout\n");
-  printf("  del [key]          Writes a tombstone on the given/stdin key in a new transaction\n");
-  printf("  set <key>          Sets the value of the given key to stdin data in a new transaction\n");
+  printf("  current-increment      Outputs the current transaction increment\n");
+  printf("  compact                Merge transactions, potentially freeing up disk space\n");
+  printf("  serialize <increment>  Serialize a transaction into hex\n");
+  printf("  ingest                 Ingest a hex transaction and store it\n");
+  printf("  get [key]              Outputs the value of the given/stdin key to stdout\n");
+  printf("  del [key]              Writes a tombstone on the given/stdin key in a new transaction\n");
+  printf("  set <key>              Sets the value of the given key to stdin data in a new transaction\n");
   printf("\n");
 }
 
@@ -31,6 +33,7 @@ int main(int argc, char **argv) {
   log_set_level(LOG_INFO);
   char *filename = NULL;
   char *command  = NULL;
+  int64_t i;
 
   // Parse global options
   int c;
@@ -159,6 +162,39 @@ int main(int argc, char **argv) {
     if (response != KVSM_OK) {
       fprintf(stderr, "Error during setting of value\n");
     }
+
+  } else if (!strcasecmp(command, "serialize")) {
+    uint64_t increment = ctx->current_increment;
+
+    if (optind < argc) {
+      increment = atoll(argv[optind]);
+      optind++;
+    } else {
+      // Intentionally empty, serialized the current increment;
+    }
+
+    struct kvsm_cursor *cursor = kvsm_cursor_fetch(ctx, increment);
+    if (!cursor) {
+      printf("(NULL)\n");
+      return 0;
+    }
+
+    struct buf         *serialized = kvsm_cursor_serialize(cursor);
+    if (!serialized) {
+      printf("(NULL)\n");
+      return 0;
+    }
+
+    // TODO: optimize?
+    i = 0;
+    while(i < serialized->len) {
+      printf("%02x", *(serialized->data + i));
+      i++;
+    }
+    printf("\n");
+
+    buf_clear(serialized);
+    free(serialized);
 
   } else {
     log_fatal("Unknown command: %s", command);

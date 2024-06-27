@@ -113,8 +113,14 @@ struct kvsm_cursor * kvsm_cursor_fetch(const struct kvsm *ctx, const uint64_t in
     read_os(ctx->fd, &_increment, sizeof(_increment));
     _increment = be64toh(_increment);
 
-    // Return if we're the "oldest" or the target increment
-    if ((_increment == increment) || (!parent)) {
+    // Found target increment
+    if (_increment == increment) {
+      return kvsm_cursor_load(ctx, current);
+    }
+
+    // TODO: make optional
+    // Return if we're the "oldest"
+    if (!parent) {
       return kvsm_cursor_load(ctx, current);
     }
 
@@ -231,7 +237,7 @@ struct _kvsm_get_response * _kvsm_get(const struct kvsm *ctx, const struct buf *
       read_os(ctx->fd, &len8, sizeof(len8));
       if (!len8) break;
       len16 = len8 & 127;
-      if (len8 >= 128) {
+      if (len8 & 128) {
         len16 = len16 << 8;
         read_os(ctx->fd, &len8, sizeof(len8));
         len16 |= len8;
@@ -500,3 +506,62 @@ void kvsm_compact(const struct kvsm *ctx) {
 
 }
 
+struct buf * kvsm_cursor_serialize(const struct kvsm_cursor *cursor) {
+  log_trace("call: kvsm_cursor_serialize(%lld)", cursor->increment);
+  const struct kvsm *ctx = cursor->ctx;
+
+  uint8_t len8;
+  uint16_t len16;
+  uint64_t len64;
+
+  // Sanity-check the version
+  seek_os(ctx->fd, cursor->offset, SEEK_SET);
+  read_os(ctx->fd, &len8, sizeof(len8));
+  if (len8 != 0) return NULL;
+
+  struct buf *output = calloc(1, sizeof(struct buf));
+
+  buf_append_byte(output, 0); // Serialized format 0
+
+  seek_os(ctx->fd, cursor->offset + sizeof(PALLOC_OFFSET), SEEK_SET);
+  read_os(ctx->fd, &len64, sizeof(len64));
+  buf_append(output, &len64, sizeof(len64));
+
+  while(1) {
+    read_os(ctx->fd, &len8, sizeof(len8));
+    buf_append(output, &len8, sizeof(len8));
+    if (!len8) break;
+
+    len16 = len8 & 127;
+    if (len8 & 128) {
+      len16 = len16 << 8;
+      read_os(ctx->fd, &len8, sizeof(len8));
+      buf_append(output, &len8, sizeof(len8));
+      len16 |= len8;
+    }
+
+    if ((output->cap - output->len) < len16) {
+      output->data = realloc(output->data, output->len + len16);
+      output->cap  = output->len + len16;
+    }
+    read_os(ctx->fd, output->data + output->len, len16);
+    output->len += len16;
+
+    read_os(ctx->fd, &len64, sizeof(len64));
+    buf_append(output, &len64, sizeof(len64));
+    len64 = be64toh(len64);
+    if ((output->cap - output->len) < len64) {
+      output->data = realloc(output->data, output->len + len64);
+      output->cap  = output->len + len64;
+    }
+    read_os(ctx->fd, output->data + output->len, len64);
+    output->len += len64;
+  }
+
+  return output;
+}
+
+KVSM_RESPONSE kvsm_cursor_ingest(const struct buf *serialized) {
+  log_trace("call: kvsm_cursor_ingest(...)");
+  return KVSM_ERROR;
+}
