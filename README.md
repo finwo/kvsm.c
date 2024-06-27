@@ -33,3 +33,12 @@ and a list of key-value pairs.
 This in turn allows for out-of-order insertion of transactions, time-based
 compaction of older transactions, and repairing of references if something went
 wrong.
+
+### Example
+
+This library includes [kvsmctl](util/kvsmctl.c) as an example program making use
+of this library.
+
+Many bugs were caught implementing and playing with it, but feel free to [open
+an issue](https://github.com/finwo/kvsm.c/issues) when you encounter something
+unexpected.
