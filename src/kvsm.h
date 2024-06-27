@@ -39,6 +39,6 @@ struct kvsm_cursor * kvsm_cursor_load(const struct kvsm *ctx, PALLOC_OFFSET offs
 struct kvsm_cursor * kvsm_cursor_fetch(const struct kvsm *ctx, const uint64_t increment);
 
 struct buf * kvsm_cursor_serialize(const struct kvsm_cursor *cursor);
-KVSM_RESPONSE kvsm_cursor_ingest(const struct buf *serialized);
+KVSM_RESPONSE kvsm_cursor_ingest(struct kvsm *ctx, const struct buf *serialized);
 
 #endif // __FINWO_KVSM_H__

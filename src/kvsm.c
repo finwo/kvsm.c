@@ -561,7 +561,91 @@ struct buf * kvsm_cursor_serialize(const struct kvsm_cursor *cursor) {
   return output;
 }
 
-KVSM_RESPONSE kvsm_cursor_ingest(const struct buf *serialized) {
+KVSM_RESPONSE kvsm_cursor_ingest(struct kvsm *ctx, const struct buf *serialized) {
   log_trace("call: kvsm_cursor_ingest(...)");
-  return KVSM_ERROR;
+
+  if (serialized->len < 1) {
+    log_error("Invalid length to ingest");
+    return KVSM_ERROR;
+  }
+
+  if (serialized->data[0] != 0) {
+    log_error("Ingestable has unsupported version");
+    return KVSM_ERROR;
+  }
+
+  uint8_t len8;
+  uint8_t len64;
+  uint64_t increment;
+  memcpy(&increment, &(serialized->data[1]), sizeof(increment));
+  increment = be64toh(increment);
+
+  PALLOC_OFFSET child   = 0;
+  PALLOC_OFFSET current = 0;
+  PALLOC_OFFSET parent  = 0;
+  if (increment > ctx->current_increment) {
+    // Newer than we currently have, dangle at the front
+    parent = ctx->current_offset;
+  } else {
+
+    current = ctx->current_offset;
+    while(1) {
+      seek_os(ctx->fd, current, SEEK_SET);
+      read_os(ctx->fd, &len8, sizeof(len8));
+      if (len8 != 0) {
+        log_error("Encountered unsupported transaction version %d at %lld", len8, seek_os(ctx->fd, 0, SEEK_CUR) - 1);
+        return KVSM_ERROR;
+      }
+
+      seek_os(ctx->fd, current, SEEK_SET);
+      read_os(ctx->fd, &parent, sizeof(parent));
+      parent = be64toh(parent);
+      log_trace("Parent of %llx is %llx", current, parent);
+      read_os(ctx->fd, &len64, sizeof(len64));
+      len64 = be64toh(len64);
+
+      // No more parents
+      // Return to dangle at the end
+      if (!parent) {
+        child = current;
+        break;
+      }
+
+      // Found spot to insert between
+      if (len64 < increment) {
+        parent = current;
+        break;
+      }
+
+      // Loop to the next parent
+      child   = current;
+      current = parent;
+    }
+  }
+
+  // Start actually writing
+  current = palloc(ctx->fd, serialized->len + sizeof(parent) - 1);
+  seek_os(ctx->fd, current, SEEK_SET);
+  // No need to mix version, we're 0
+  log_debug("Ingesting with parent %llx", parent);
+  parent = htobe64(parent);
+  write_os(ctx->fd, &parent, sizeof(parent));
+  // Write serialized data as-is, it matches our on-disk format
+  write_os(ctx->fd, serialized->data + 1, serialized->len - 1);
+
+  // Update child's parent pointer if we got one
+  log_debug("Ingesting with child %llx", child);
+  if (child) {
+    current = htobe64(current);
+    seek_os(ctx->fd, child, SEEK_SET);
+    write_os(ctx->fd, &current, sizeof(current));
+  }
+
+  // Update root marker if needed
+  if (increment > ctx->current_increment) {
+    ctx->current_increment = increment;
+    ctx->current_offset    = current;
+  }
+
+  return KVSM_OK;
 }

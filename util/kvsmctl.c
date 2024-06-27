@@ -197,8 +197,35 @@ int main(int argc, char **argv) {
     free(serialized);
 
   } else {
-    log_fatal("Unknown command: %s", command);
-    return 1;
+    const char * serialized_raw = NULL;
+
+    if (optind < argc) {
+      serialized_raw = argv[optind];
+      optind++;
+    } else {
+      log_fatal("Must provide a serialized transaction");
+      return 1;
+    }
+
+    struct buf *serialized = calloc(1, sizeof(struct buf));
+    serialized->cap  = strlen(serialized_raw);
+    serialized->data = malloc(serialized->cap);
+    if (!serialized->data) {
+      log_fatal("Unable to reserve memory for decoded increment");
+      return 1;
+    }
+
+    for( i = 0 ; i < serialized->cap ; i += 2 ) {
+      sscanf(serialized_raw + i, "%2hhx", &(serialized->data[i/2]));
+      serialized->len++;
+    }
+
+    if (kvsm_cursor_ingest(ctx, serialized) != KVSM_OK) {
+      log_fatal("Unable to ingest transaction");
+      return 1;
+    }
+
+    return 0;
   }
 
   kvsm_close(ctx);
