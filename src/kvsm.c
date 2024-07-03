@@ -98,6 +98,7 @@ struct kvsm_cursor * kvsm_cursor_fetch(const struct kvsm *ctx, const uint64_t in
 
   PALLOC_OFFSET parent;
   PALLOC_OFFSET current = ctx->current_offset;
+  PALLOC_OFFSET child   = ctx->current_offset;
   uint64_t _increment;
   uint8_t len8;
 
@@ -118,6 +119,11 @@ struct kvsm_cursor * kvsm_cursor_fetch(const struct kvsm *ctx, const uint64_t in
       return kvsm_cursor_load(ctx, current);
     }
 
+    // Found target increment
+    if (_increment <= increment) {
+      return kvsm_cursor_load(ctx, child);
+    }
+
     // TODO: make optional
     // Return if we're the "oldest"
     if (!parent) {
@@ -125,6 +131,7 @@ struct kvsm_cursor * kvsm_cursor_fetch(const struct kvsm *ctx, const uint64_t in
     }
 
     // Go to the parent
+    child   = current;
     current = parent;
   }
 
@@ -184,14 +191,16 @@ struct kvsm * kvsm_open(const char *filename, const int isBlockDev) {
   return ctx;
 }
 
-void kvsm_close(struct kvsm *ctx) {
-  if (!ctx) return;
+KVSM_RESPONSE kvsm_close(struct kvsm *ctx) {
+  if (!ctx) return KVSM_ERROR;
   palloc_close(ctx->fd);
   free(ctx);
+  return KVSM_OK;
 }
 
-void kvsm_cursor_free(struct kvsm_cursor *cursor) {
+KVSM_RESPONSE kvsm_cursor_free(struct kvsm_cursor *cursor) {
   free(cursor);
+  return KVSM_OK;
 }
 
 struct _kvsm_get_response {
@@ -387,18 +396,13 @@ KVSM_RESPONSE kvsm_set(struct kvsm *ctx, const struct buf *key, const struct buf
   return KVSM_OK;
 }
 
-KVSM_RESPONSE kvsm_del(struct kvsm *ctx, const struct buf *key) {
-  log_trace("call: kvsm_del(...)");
-  return kvsm_set(ctx, key, &((struct buf){ .len = 0, .cap = 0 }));
-}
-
 // Caution: lazy algorithm
 // Goes through every "transaction", and discards them if it only contains non-current versions
 struct kvsm_compact_track {
   uint16_t  len;
   char     *dat;
 };
-void kvsm_compact(const struct kvsm *ctx) {
+KVSM_RESPONSE kvsm_compact(const struct kvsm *ctx) {
   PALLOC_OFFSET child = 0;
   PALLOC_OFFSET current = ctx->current_offset;
   PALLOC_OFFSET parent = 0;
@@ -419,7 +423,7 @@ void kvsm_compact(const struct kvsm *ctx) {
 
     seek_os(ctx->fd, current, SEEK_SET);
     read_os(ctx->fd, &len8, sizeof(len8));
-    if (len8 != 0) return; // Only version 0 supported
+    if (len8 != 0) return KVSM_ERROR; // Only version 0 supported
 
     seek_os(ctx->fd, current, SEEK_SET);
     read_os(ctx->fd, &parent, sizeof(parent));
@@ -487,7 +491,7 @@ void kvsm_compact(const struct kvsm *ctx) {
       // Sanity check
       seek_os(ctx->fd, child, SEEK_SET);
       read_os(ctx->fd, &len8, sizeof(len8));
-      if (len8 != 0) return; // Only version 0 supported, bail
+      if (len8 != 0) return KVSM_ERROR; // Only version 0 supported, bail
 
       seek_os(ctx->fd, child, SEEK_SET);
       // No need to mix version, we're 0
@@ -504,6 +508,7 @@ void kvsm_compact(const struct kvsm *ctx) {
     // Don't update child, hasn't changed
   }
 
+  return KVSM_OK;
 }
 
 struct buf * kvsm_cursor_serialize(const struct kvsm_cursor *cursor) {
