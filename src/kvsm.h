@@ -1,6 +1,52 @@
 #ifndef __FINWO_KVSM_H__
 #define __FINWO_KVSM_H__
 
+/// # kvsm
+///
+/// Key-value storage machine
+///
+/// ## Installing
+///
+/// This library makes use of [dep](https://github.com/finwo/dep) to manage it's
+/// dependencies and exports.
+///
+/// ```sh
+/// dep add finwo/kvsm@main
+/// ```
+///
+/// ## Usage
+///
+/// TODO
+///
+/// ## About
+///
+/// ### Why
+///
+/// Well, I wanted something simple that I can embed into other applications.
+/// This library is designed to be simple, not to break any records.
+///
+/// ### How
+///
+/// This library makes use of [palloc](https://github.com/finwo/palloc.c) to
+/// handle blob allocations on a file or block device. Each blob represents a
+/// transaction.
+///
+/// From there, a transaction contains a parent reference, a time-based
+/// identifier and a list of key-value pairs.
+///
+/// This in turn allows for out-of-order insertion of transactions, time-based
+/// compaction of older transactions, and repairing of references if something
+/// went wrong.
+///
+/// ### Example
+///
+/// This library includes [kvsmctl](util/kvsmctl.c) as an example program making
+/// use of this library.
+///
+/// Many bugs were caught implementing and playing with it, but feel free to
+/// [open an issue](https://github.com/finwo/kvsm.c/issues) when you encounter
+/// something unexpected.
+
 #include <stdint.h>
 
 #include "finwo/palloc.h"

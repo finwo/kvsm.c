@@ -13,13 +13,16 @@ OBJ:=$(SRC:.c=.o)
 OBJ:=$(OBJ:.cc=.o)
 
 .PHONY: all
-all: kvsmctl
+all: kvsmctl README.md
 
 .c.o:
 	${CC} ${INCLUDES} ${CFLAGS} -c $< -o $@
 
 kvsmctl: util/kvsmctl.c $(OBJ)
 	${CC} ${INCLUDES} ${CFLAGS} ${LDFLAGS} ${OBJ} $< -o $@
+
+README.md: src/kvsm.h
+	stddoc < $< > README.md
 
 .PHONY: clean
 clean:
