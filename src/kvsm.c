@@ -279,6 +279,11 @@ struct _kvsm_get_response * _kvsm_get(const struct kvsm *ctx, const struct buf *
       // Here = found
       buf_clear(&k);
 
+      // Handle delete marker response
+      if (!len64) {
+        return NULL;
+      }
+
       resp = malloc(sizeof(struct _kvsm_get_response));
       if (!resp) {
         log_error("Error during memory allocation for get return wrapper");
