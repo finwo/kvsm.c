@@ -1,0 +1,115 @@
+---
+
+name: Build
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+
+  build-windows:
+    name: Build & test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            cc: clang
+    steps:
+      - uses: actions/checkout@v4
+
+      - shell: bash
+        run: |
+          echo "/c/msys64/mingw64/bin" >> $GITHUB_PATH
+
+      - uses: finwo/stddoc.c@edge
+        name: Install stddoc
+
+      - uses: finwo/dep@main
+        name: Install dep
+
+      - name: Install dependencies
+        run: dep install
+        shell: bash
+
+      - name: Build & check
+        shell: bash
+        run: |
+          make CC=${{ matrix.cc }}
+          ./test
+
+  build-linux:
+    name: Build & test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+
+          - distro: ubuntu_latest
+            arch: aarch64
+            cc: gcc
+
+          - distro: ubuntu_latest
+            arch: riscv64
+            cc: gcc
+
+          - distro: ubuntu_latest
+            arch: none
+            cc: gcc
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: finwo/dep@main
+        name: Install dep
+
+      - if: ${{ matrix.arch == 'none' }}
+        uses: finwo/stddoc.c@edge
+        name: Install stddoc
+
+      - name: Install dependencies
+        run: dep install
+        shell: bash
+
+      - if: ${{ matrix.arch != 'none' }}
+        uses: uraimo/run-on-arch-action@v2
+        name: Build & check (${{ matrix.arch }})
+        id: runcmd
+        continue-on-error: true
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ${{ matrix.distro }}
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update -yq
+            apt-get install -yq build-essential wget
+            wget https://github.com/finwo/stddoc.c/releases/download/edge/stddoc-lin-${{ matrix.arch }} -o /usr/local/bin/stddoc
+            chmod +x /usr/local/bin/stddoc
+          run: |
+            make CC=${{ matrix.cc }}
+            ./test
+
+      - if: ${{ matrix.arch != 'none' && steps.runcmd.outcome == 'failure' }}
+        uses: uraimo/run-on-arch-action@v2
+        name: Build & check (${{ matrix.arch }}, retry)
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ${{ matrix.distro }}
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update -yq
+            apt-get install -yq build-essential wget
+            wget https://github.com/finwo/stddoc.c/releases/download/edge/stddoc-lin-${{ matrix.arch }} -o /usr/local/bin/stddoc
+            chmod +x /usr/local/bin/stddoc
+          run: |
+            make CC=${{ matrix.cc }}
+            ./test
+
+      - if: ${{ matrix.arch == 'none' }}
+        name: Build & check (native)
+        shell: bash
+        run: |
+          make CC=${{ matrix.cc }}
+          ./test
