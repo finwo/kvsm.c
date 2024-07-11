@@ -1,0 +1,53 @@
+Old blob layout
+
+  header
+    8 bytes
+      1 byte transaction version (0)
+      7 bytes parent offset
+    8 bytes increment
+  entry[]
+    1-2 bytes key length (0 = end of list)
+    1-32767 bytes key
+    8 bytes data length
+    0-(2^64-1) bytes data
+
+
+New blob layout
+
+  header
+    1 byte transaction version (0)
+    15 bytes transaction identifier (randomly generated during commit)
+    8 bytes height/increment (must be 1 higher than that of highest parent)
+    8 bytes parent offset [] (0 = end-of-list)
+  entry[]
+    1-2 bytes key length (0 = end of list)
+    1-32767 bytes key
+    8 bytes data length
+    0-(2^64-1) bytes data
+
+Transaction sync idea:
+
+  Nodes have predefined connections (--join <ip>:<port> on cli?)
+
+  Node (A) requests current head list from node (B)
+    Request for parents of virtual transaction 0
+  (B) responds with parents/heads
+
+  While received heads contain unknown identifiers:
+    (A) requests parent list of identifier I
+    (B) responds with I's parent identifiers
+    (A) follows unknown parent path until all parents are known for I
+    (A) requests contents of I
+    (B) responds with contents
+    (A) stores transaction, optionally updating it's own heads, keeping track of it's internal height
+
+  Initially: Pulls 1 transaction per sync, schedule another sync if anything was pulled
+  Eventually?: keep track of seen identifiers, pull all?
+
+Compaction:
+
+  Idea stays the same:
+
+  Iterate every transaction in storage
+  Keep transactions with reachable entries
+  Discard transactions with no reachable entries
