@@ -24,11 +24,12 @@ This library makes use of [palloc](https://github.com/finwo/palloc.c) to
 handle blob allocations on a file or block device. Each blob represents a
 transaction.
 
-From there, a transaction contains a parent reference, an increment number
-and a list of key-value pairs.
+From there, a transaction contains one or more parent references, an
+increment number and a list of key-value pairs.
 
 This in turn allows for out-of-order insertion of transactions, compaction
-of older transactions, and repairing of references if something went wrong.
+of older transactions, and even having multiple nodes sync up their
+transactions in a deterministic manner
 
 ## API
 
@@ -75,24 +76,24 @@ of older transactions, and repairing of references if something went wrong.
 
 ```C
 struct kvsm {
- PALLOC_FD     fd;
- PALLOC_OFFSET current_offset;
- uint64_t      current_increment;
+ PALLOC_FD      fd;
+ PALLOC_OFFSET *head;
+ int            head_count;
 };
 ```
 
 </details>
 <details>
-  <summary>struct kvsm_cursor</summary>
+  <summary>struct kvsm_transaction</summary>
 
-  Represents a cursor to a kvsm increment/transaction
+  TBD
 
 ```C
-struct kvsm_cursor {
+struct kvsm_transaction {
  const struct kvsm *ctx;
- PALLOC_OFFSET      parent;
- PALLOC_OFFSET      offset;
- uint64_t           increment;
+ const struct buf  *id;
+ PALLOC_OFFSET     *parent;
+ int                parent_count;
 };
 ```
 
@@ -160,81 +161,6 @@ KVSM_RESPONSE kvsm_set(struct kvsm *ctx, const struct buf *key, const struct buf
 
 ```C
 #define kvsm_del(ctx,key) (kvsm_set(ctx,key,&((struct buf){ .len = 0, .cap = 0 })))
-```
-
-</details>
-<details>
-  <summary>kvsm_cursor_free(cursor)</summary>
-
-  Frees the used memory by the given cursor
-
-```C
-KVSM_RESPONSE kvsm_cursor_free(struct kvsm_cursor *cursor);
-```
-
-</details>
-<details>
-  <summary>kvsm_cursor_previous(cursor)</summary>
-
-  Returns a NEW cursor, pointing to the given cursor's parent transaction,
-  or NULL if the given cursor has no parent
-
-```C
-struct kvsm_cursor * kvsm_cursor_previous(const struct kvsm_cursor *cursor);
-```
-
-</details>
-<details>
-  <summary>kvsm_cursor_next(cursor)</summary>
-
-  Returns a NEW cursor, pointing to the given cursor's child transaction,
-  or NULL if the given cursor has no child
-
-```C
-struct kvsm_cursor * kvsm_cursor_next(const struct kvsm_cursor *cursor);
-```
-
-</details>
-<details>
-  <summary>kvsm_cursor_load(ctx, offset)</summary>
-
-  Returns a new cursor, loaded from the transaction at the given offset.
-
-```C
-struct kvsm_cursor * kvsm_cursor_load(const struct kvsm *ctx, PALLOC_OFFSET offset);
-```
-
-</details>
-<details>
-  <summary>kvsm_cursor_fetch(ctx, increment)</summary>
-
-  Returns a new cursor pointing to the transaction with the given increment,
-  or to the oldest transaction available higher than the given increment.
-
-```C
-struct kvsm_cursor * kvsm_cursor_fetch(const struct kvsm *ctx, const uint64_t increment);
-```
-
-</details>
-<details>
-  <summary>kvsm_cursor_serialize(cursor)</summary>
-
-  Returns a buffer representing the serialized transaction, including
-  increment and values
-
-```C
-struct buf * kvsm_cursor_serialize(const struct kvsm_cursor *cursor);
-```
-
-</details>
-<details>
-  <summary>kvsm_cursor_ingest(ctx, serialized)</summary>
-
-  Ingests the given serialized transaction, inserting it with the existing
-  increment instead of writing a new one
-
-```C
-KVSM_RESPONSE kvsm_cursor_ingest(struct kvsm *ctx, const struct buf *serialized);
 ```
 
 </details>

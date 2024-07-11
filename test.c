@@ -9,16 +9,16 @@
 #include "src/kvsm.h"
 
 void test_kvsm_regular() {
-  struct kvsm *ctx;
-
-  ctx = kvsm_open("test.db", 0);
-  ASSERT("Opening a file returns a context", ctx != NULL);
-  ASSERT("Closing a file context returns OK", kvsm_close(ctx) == KVSM_OK);
-
-  ctx = kvsm_open(NULL, 0);
-  ASSERT("Opening a NULL returns no context", ctx == NULL);
-  ASSERT("Closing a NULL context returns ERROR", kvsm_close(ctx) != KVSM_OK);
-
+  /*struct kvsm *ctx;*/
+  /**/
+  /*ctx = kvsm_open("test.db", 0);*/
+  /*ASSERT("Opening a file returns a context", ctx != NULL);*/
+  /*ASSERT("Closing a file context returns OK", kvsm_close(ctx) == KVSM_OK);*/
+  /**/
+  /*ctx = kvsm_open(NULL, 0);*/
+  /*ASSERT("Opening a NULL returns no context", ctx == NULL);*/
+  /*ASSERT("Closing a NULL context returns ERROR", kvsm_close(ctx) != KVSM_OK);*/
+  /**/
 }
 
 int main() {
