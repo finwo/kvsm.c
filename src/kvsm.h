@@ -167,82 +167,50 @@ KVSM_RESPONSE kvsm_set(struct kvsm *ctx, const struct buf *key, const struct buf
 ///>
 /// </details>
 
+/// <details>
+///   <summary>kvsm_transaction_get_id(ctx, offset)</summary>
+///
+///   Gets the identifier of the transaction located at the given offset
+///<C
+struct buf * kvsm_transaction_get_id(const struct kvsm *ctx, PALLOC_OFFSET offset);
+///>
+/// </details>
 
-// TODO
-// buf  kvsm_tx_get_id(ctx,offset)
-// tx   kvsm_tx_load_id(ctx,identifier) //-- gets metadata/struct, not entries
-// resp kvsm_tx_free(tx)
-// buf  kvsm_tx_serialize(tx) //-- includes data
-// resp kvsm_tx_ingest(buf)
+/// <details>
+///   <summary>kvsm_transaction_load_id(ctx, identifier)</summary>
+///
+///   Loads the metadata for the given transaction id and returns a transaction struct for it
+///<C
+struct kvsm_transaction * kvsm_transaction_load_id(const struct kvsm *ctx, const struct buf *identifier);
+///>
+/// </details>
 
+/// <details>
+///   <summary>kvsm_transaction_free(tx)</summary>
+///
+///   Frees up the memory used by the transaction
+///<C
+KVSM_RESPONSE kvsm_transaction_free(struct kvsm_transaction *tx);
+///>
+/// </details>
 
-// // <details>
-// //   <summary>kvsm_cursor_free(cursor)</summary>
-// //
-// //   Frees the used memory by the given cursor
-// //<C
-// KVSM_RESPONSE kvsm_cursor_free(struct kvsm_cursor *cursor);
-// //>
-// // </details>
-//
-// // <details>
-// //   <summary>kvsm_cursor_previous(cursor)</summary>
-// //
-// //   Returns a NEW cursor, pointing to the given cursor's parent transaction,
-// //   or NULL if the given cursor has no parent
-// //<C
-// struct kvsm_cursor * kvsm_cursor_previous(const struct kvsm_cursor *cursor);
-// //>
-// // </details>
-//
-// // <details>
-// //   <summary>kvsm_cursor_next(cursor)</summary>
-// //
-// //   Returns a NEW cursor, pointing to the given cursor's child transaction,
-// //   or NULL if the given cursor has no child
-// //<C
-// struct kvsm_cursor * kvsm_cursor_next(const struct kvsm_cursor *cursor);
-// //>
-// // </details>
-//
-// // <details>
-// //   <summary>kvsm_cursor_load(ctx, offset)</summary>
-// //
-// //   Returns a new cursor, loaded from the transaction at the given offset.
-// //<C
-// struct kvsm_cursor * kvsm_cursor_load(const struct kvsm *ctx, PALLOC_OFFSET offset);
-// //>
-// // </details>
-//
-// // <details>
-// //   <summary>kvsm_cursor_fetch(ctx, increment)</summary>
-// //
-// //   Returns a new cursor pointing to the transaction with the given increment,
-// //   or to the oldest transaction available higher than the given increment.
-// //<C
-// struct kvsm_cursor * kvsm_cursor_fetch(const struct kvsm *ctx, const uint64_t increment);
-// //>
-// // </details>
-//
-// // <details>
-// //   <summary>kvsm_cursor_serialize(cursor)</summary>
-// //
-// //   Returns a buffer representing the serialized transaction, including
-// //   increment and values
-// //<C
-// struct buf * kvsm_cursor_serialize(const struct kvsm_cursor *cursor);
-// //>
-// // </details>
-//
-// // <details>
-// //   <summary>kvsm_cursor_ingest(ctx, serialized)</summary>
-// //
-// //   Ingests the given serialized transaction, inserting it with the existing
-// //   increment instead of writing a new one
-// //<C
-// KVSM_RESPONSE kvsm_cursor_ingest(struct kvsm *ctx, const struct buf *serialized);
-// //>
-// // </details>
+/// <details>
+///   <summary>kvsm_transaction_serialize</summary>
+///
+///   Serializes the transaction, including contents
+///<C
+struct buf * kvsm_transaction_serialize(const struct kvsm_transaction *tx);
+///>
+/// </details>
+
+/// <details>
+///   <summary>kvsm_transaction_ingest</summary>
+///
+///   Stores the given transaction and it's data
+///<C
+KVSM_RESPONSE kvsm_transaction_ingest(const struct buf *data);
+///>
+/// </details>
 
 ///
 /// ## Example
