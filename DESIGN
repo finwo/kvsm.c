@@ -53,6 +53,8 @@ Transaction sync idea (part of keveat, not kvsm):
   Eventually?: keep track of seen identifiers, pull all?
   Including height in sync ensures old data (from orphaned out-of-sync node) doesn't overwrite newer data
   Assumes all nodes in the network are trusted
+  A received transaction must be rejected if it's height doesn't follow the always-incrementing rule
+  chain root = null = virtual transaction without data, always matches between nodes
 
 Compaction:
 
