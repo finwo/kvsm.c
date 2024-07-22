@@ -17,7 +17,7 @@ New blob layout
   header
     1 byte transaction version (0)
     15 bytes transaction identifier (randomly generated during commit)
-    8 bytes height/increment (must be 1 higher than that of highest parent, bubbling down during compaction?)
+    8 bytes height/increment (must be 1 higher than that of highest parent)
     8 bytes parent offset [] (0 = end-of-list)
   entry[]
     1-2 bytes key length (0 = end of list)
@@ -25,24 +25,34 @@ New blob layout
     8 bytes data length
     0-(2^64-1) bytes data
 
+During GET of a certain key
+  - Get the current heads, add to processing queue
+  - Read keys of highest tx in queue
+    - found -> return
+  - Add parents of current tx in queue (deduplicate!, insert in-order)
+  - Iterate, keep reading highest
+  - Found root of storage, or tombstone = not found
+
 Transaction sync idea (part of keveat, not kvsm):
 
   Nodes have predefined connections (--join <ip>:<port> on cli?)
 
-  Node (A) requests current head list from node (B)
-    Request for parents of virtual transaction 0
-  (B) responds with parents/heads
+  Node (A) requests current head list from node (B) (GET /api/v1/transactions/HEAD/parents)
+    Request for parents of virtual transaction 0/HEAD
+  (B) responds with parents/heads and their height
 
   While received heads contain unknown identifiers:
-    (A) requests parent list of identifier I
+    (A) requests parent list of identifier I (GET /api/v1/transactions/&lt;I&gt;/parents)
     (B) responds with I's parent identifiers
     (A) follows unknown parent path until all parents are known for I
-    (A) requests contents of I
+    (A) requests contents of I (GET /api/v1/transactions/&lt;I&gt;/contents)
     (B) responds with contents
     (A) stores transaction, optionally updating it's own heads, keeping track of it's internal height
 
   Initially: Pulls 1 transaction per sync, schedule another sync if anything was pulled
   Eventually?: keep track of seen identifiers, pull all?
+  Including height in sync ensures old data (from orphaned out-of-sync node) doesn't overwrite newer data
+  Assumes all nodes in the network are trusted
 
 Compaction:
 
